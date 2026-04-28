@@ -35,6 +35,9 @@ scheduler = AsyncIOScheduler()
 
 # ── Core agent job ────────────────────────────────────────────────────────────
 
+MAX_SAFETY_RETRIES = 3
+
+
 async def run_generation_job() -> None:
     """Researches, writes, safety-checks, and emails the daily draft for approval."""
     logger.info("Generation job started")
@@ -46,26 +49,34 @@ async def run_generation_job() -> None:
 
         logger.info(f"Topic: {topic.name} | Format: {post_format} | CTA: {cta}")
 
-        articles = research_topic(topic, max_results=5)
-        if not articles:
-            logger.warning("No articles found — skipping today")
-            return
+        exclude_urls: list[str] = []
+        post_text = sources = warnings = None
 
-        post_text, sources = generate_post(
-            cfg=cfg,
-            topic_name=topic.name,
-            post_format=post_format,
-            articles=articles,
-            cta=cta,
-        )
+        for attempt in range(1, MAX_SAFETY_RETRIES + 1):
+            articles = research_topic(topic, max_results=5, exclude_urls=exclude_urls or None)
+            if not articles:
+                logger.warning("No articles found — skipping today")
+                return
 
-        warnings: list[str] = []
-        try:
-            safety_result = safety_review(post_text)
-            warnings = safety_result.issues
-        except SafetyError as e:
-            logger.error(f"Safety check blocked post: {e}")
-            return
+            post_text, sources = generate_post(
+                cfg=cfg,
+                topic_name=topic.name,
+                post_format=post_format,
+                articles=articles,
+                cta=cta,
+            )
+
+            warnings = []
+            try:
+                safety_result = safety_review(post_text)
+                warnings = safety_result.issues
+                break  # safety passed — exit retry loop
+            except SafetyError as e:
+                exclude_urls.extend(sources)
+                if attempt == MAX_SAFETY_RETRIES:
+                    logger.error(f"Safety blocked all {MAX_SAFETY_RETRIES} attempts — skipping today")
+                    return
+                logger.warning(f"Safety blocked attempt {attempt}/{MAX_SAFETY_RETRIES}, retrying with different sources")
 
         post = Post(
             agent_id=cfg.agent_id,
