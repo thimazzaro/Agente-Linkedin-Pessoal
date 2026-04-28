@@ -245,13 +245,26 @@ def _get_post_or_403(post_id: str, token: str) -> Post:
 @app.get("/review/{post_id}", response_class=HTMLResponse)
 async def review_page(request: Request, post_id: str, token: str):
     db = SessionLocal()
-    post = db.get(Post, post_id)
-    db.close()
-    if not post or post.review_token != token:
-        return HTMLResponse("<h2>Invalid or expired link.</h2>", status_code=403)
+    try:
+        post = db.get(Post, post_id)
+        if not post or post.review_token != token:
+            return HTMLResponse("<h2>Invalid or expired link.</h2>", status_code=403)
+        # Extract all fields while session is open to avoid DetachedInstanceError
+        post_data = {
+            "id": post.id,
+            "topic_name": post.topic_name,
+            "post_format": post.post_format,
+            "content": post.content,
+            "rewrite_count": post.rewrite_count,
+            "scheduled_date": post.scheduled_date,
+            "status": post.status,
+        }
+    finally:
+        db.close()
     return templates.TemplateResponse(
-        "review.html",
-        {"request": request, "post": post, "token": token},
+        request=request,
+        name="review.html",
+        context={"post": post_data, "token": token},
     )
 
 
