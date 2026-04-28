@@ -1,0 +1,97 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# LinkedIn Agent — Configuration Template
+# Copy this file to config.yaml and fill in your values.
+# Secrets (API keys, passwords) go in .env — never in this file.
+# ─────────────────────────────────────────────────────────────────────────────
+
+agent_id: "thiago_mazzaro"   # Unique ID — change per deployment for multi-tenant logging
+
+# ── Who are you? ──────────────────────────────────────────────────────────────
+profile:
+  name: "Thiago Mazzaro"
+  role: "Business leader in financial markets and AI"
+  bio: >
+    Executive with experience in international financial markets and AI adoption
+    in business contexts. Focused on strategy, innovation, and the intersection
+    of technology and finance.
+  voice: "third_person"      # first_person | third_person
+  tone: "semi_formal"        # formal | semi_formal | informal
+  language: "en"             # en | pt-BR | es (posts will be written in this language)
+
+# ── What topics do you cover? ─────────────────────────────────────────────────
+topics:
+  rotation: "alternating"    # alternating (AI → Finance → AI …) | random
+  items:
+    - name: "Artificial Intelligence"
+      description: "Latest developments in AI, LLMs, generative AI, and enterprise AI adoption"
+      keywords:
+        - "artificial intelligence"
+        - "large language models"
+        - "generative AI"
+        - "AI in business"
+        - "machine learning enterprise"
+      sources:               # Leave empty to search the entire web
+        - "techcrunch.com"
+        - "venturebeat.com"
+        - "wired.com"
+        - "technologyreview.com"
+        - "theinformation.com"
+
+    - name: "International Financial Markets"
+      description: "Global markets, macroeconomics, central banks, and international finance"
+      keywords:
+        - "global financial markets"
+        - "Federal Reserve"
+        - "interest rates"
+        - "S&P 500"
+        - "international economy"
+        - "emerging markets"
+      sources:
+        - "ft.com"
+        - "reuters.com"
+        - "bloomberg.com"
+        - "wsj.com"
+        - "economist.com"
+
+# ── How should posts be formatted? ────────────────────────────────────────────
+post_format:
+  min_words: 400
+  max_words: 600
+  emojis: "minimal"          # none | minimal | moderate
+  hashtags_max: 4
+  cta_frequency: 2           # Include a CTA every N posts (0 = never)
+  week_schedule:
+    monday: "analysis"       # Bold opinion or argument
+    tuesday: "list"          # "5 things about X"
+    wednesday: "news_context"# Recent news + context
+    thursday: "trend"        # Emerging trend + implications
+    friday: "week_wrap"      # Week in review
+
+# ── When does the agent run? ───────────────────────────────────────────────────
+schedule:
+  generate_time: "06:00"     # Draft generation + approval email sent at this time
+  publish_time: "09:00"      # Approved posts published at this time
+  timezone: "America/Sao_Paulo"
+  days:
+    - monday
+    - tuesday
+    - wednesday
+    - thursday
+    - friday
+
+# ── Approval flow ─────────────────────────────────────────────────────────────
+approval:
+  email: "thimazzaro83@gmail.com"   # Where to send drafts for review
+  auto_publish_if_no_response: false
+  max_rewrites: 3                   # Max feedback rounds before dropping the post
+
+# ── LinkedIn ──────────────────────────────────────────────────────────────────
+linkedin:
+  profile_type: "personal"   # personal | company
+
+# ── Safety & copyright settings ──────────────────────────────────────────────
+safety:
+  no_financial_advice: true          # Blocks "buy/sell/invest in X" language
+  no_political: true                 # Blocks political opinions
+  cite_sources: true                 # Forces source attribution in every post
+  max_verbatim_pct: 15               # Max % of verbatim source text allowed

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Review LinkedIn Draft</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      background: #f3f2ef;
+      margin: 0;
+      padding: 24px 16px;
+      color: #1a1a1a;
+    }
+    .container { max-width: 680px; margin: auto; }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .header svg { flex-shrink: 0; }
+    h1 { font-size: 20px; margin: 0; color: #0077b5; }
+    .meta { font-size: 13px; color: #666; margin: 0; }
+
+    .badge {
+      display: inline-block;
+      background: #e8f4fd;
+      color: #0077b5;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+
+    /* LinkedIn post preview card */
+    .post-card {
+      background: white;
+      border: 1px solid #dce6f0;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .post-card .post-author {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .avatar {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background: #0077b5;
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-weight: bold; font-size: 18px;
+      flex-shrink: 0;
+    }
+    .author-name { font-weight: 600; font-size: 15px; }
+    .author-role { font-size: 13px; color: #666; }
+    .post-text {
+      white-space: pre-wrap;
+      line-height: 1.65;
+      font-size: 15px;
+      color: #1a1a1a;
+    }
+    .post-meta {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid #eee;
+      font-size: 12px;
+      color: #888;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    /* Rewrite warning */
+    .rewrite-badge {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
+    /* Action panels */
+    .actions { display: flex; flex-direction: column; gap: 14px; }
+
+    .panel {
+      background: white;
+      border: 1px solid #dce6f0;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .panel h3 { margin: 0 0 12px; font-size: 15px; }
+
+    .btn {
+      display: inline-block;
+      padding: 11px 28px;
+      border: none;
+      border-radius: 24px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      width: 100%;
+    }
+    .btn-approve {
+      background: #0077b5;
+      color: white;
+    }
+    .btn-approve:hover { background: #005c8e; }
+
+    .btn-feedback {
+      background: white;
+      color: #c0392b;
+      border: 2px solid #c0392b;
+    }
+    .btn-feedback:hover { background: #fdf0ee; }
+
+    textarea {
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 100px;
+      margin-bottom: 12px;
+    }
+    textarea:focus { outline: none; border-color: #0077b5; }
+
+    .footer {
+      text-align: center;
+      font-size: 11px;
+      color: #aaa;
+      margin-top: 24px;
+    }
+
+    @media (min-width: 600px) {
+      .actions { flex-direction: row; }
+      .panel { flex: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="header">
+      <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+        <rect width="36" height="36" rx="6" fill="#0077b5"/>
+        <text x="18" y="25" text-anchor="middle" fill="white" font-size="20" font-family="Arial" font-weight="bold">in</text>
+      </svg>
+      <div>
+        <h1>LinkedIn Post Draft</h1>
+        <p class="meta">Topic: <strong>{{ post.topic_name }}</strong> &nbsp;·&nbsp; Format: <strong>{{ post.post_format.replace("_", " ").title() }}</strong></p>
+      </div>
+    </div>
+
+    {% if post.rewrite_count > 0 %}
+    <div class="rewrite-badge">
+      ↩ This is rewrite #{{ post.rewrite_count }} based on your previous feedback.
+    </div>
+    {% endif %}
+
+    <!-- Post preview -->
+    <div class="post-card">
+      <div class="post-author">
+        <div class="avatar">{{ post.topic_name[0].upper() }}</div>
+        <div>
+          <div class="author-name">Your LinkedIn Profile</div>
+          <div class="author-role">Just now · 🌐</div>
+        </div>
+      </div>
+      <div class="post-text">{{ post.content }}</div>
+      <div class="post-meta">
+        <span>{{ post.scheduled_date.strftime("%B %d, %Y") }}</span>
+        <span>Post ID: {{ post.id[:8] }}…</span>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions">
+
+      <!-- Approve -->
+      <div class="panel">
+        <h3>✅ Approve &amp; Schedule</h3>
+        <p style="font-size:13px;color:#555;margin-bottom:16px;">
+          Post will be published at the scheduled time today.
+        </p>
+        <form method="POST" action="/approve/{{ post.id }}">
+          <input type="hidden" name="token" value="{{ token }}" />
+          <button type="submit" class="btn btn-approve">Approve Post</button>
+        </form>
+      </div>
+
+      <!-- Feedback -->
+      <div class="panel">
+        <h3>✏️ Request Changes</h3>
+        <form method="POST" action="/feedback/{{ post.id }}">
+          <input type="hidden" name="token" value="{{ token }}" />
+          <textarea
+            name="feedback"
+            placeholder="Describe what you'd like changed — tone, specific facts, structure, length…"
+            required
+          ></textarea>
+          <button type="submit" class="btn btn-feedback">Send Feedback &amp; Rewrite</button>
+        </form>
+      </div>
+
+    </div>
+
+    <p class="footer">LinkedIn Agent · This link is unique to this draft and expires once used.</p>
+  </div>
+</body>
+</html>
