@@ -1,27 +1,21 @@
 """
-Sends approval emails via Gmail SMTP.
-Uses SMTP_USER + SMTP_APP_PASSWORD env vars (Gmail App Password, not account password).
-APP_BASE_URL must be set to the Railway deployment URL so review links work.
+Sends approval emails via Resend (https://resend.com).
+Resend uses HTTPS — works on Railway where direct SMTP is blocked.
+Requires: RESEND_API_KEY env var.
+Optional: EMAIL_FROM (defaults to onboarding@resend.dev for testing).
 """
 import os
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import resend
 
 
-def _smtp_connection() -> smtplib.SMTP_SSL:
-    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.getenv("SMTP_PORT", "465"))
-    user = os.environ["SMTP_USER"]
-    password = os.environ["SMTP_APP_PASSWORD"]
-    conn = smtplib.SMTP_SSL(smtp_host, smtp_port)
-    conn.login(user, password)
-    return conn
+def _send(to: str, subject: str, html: str) -> None:
+    resend.api_key = os.environ["RESEND_API_KEY"]
+    sender = os.getenv("EMAIL_FROM", "LinkedIn Agent <onboarding@resend.dev>")
+    resend.Emails.send({"from": sender, "to": to, "subject": subject, "html": html})
 
 
 def _base_url() -> str:
-    url = os.getenv("APP_BASE_URL", "http://localhost:8000").rstrip("/")
-    return url
+    return os.getenv("APP_BASE_URL", "http://localhost:8000").rstrip("/")
 
 
 def send_review_email(
@@ -34,9 +28,6 @@ def send_review_email(
     rewrite_count: int = 0,
     safety_warnings: list[str] | None = None,
 ) -> None:
-    """
-    Sends the draft post to the approver with Approve / Request Changes links.
-    """
     base = _base_url()
     review_url = f"{base}/review/{post_id}?token={review_token}"
 
@@ -66,11 +57,11 @@ def send_review_email(
         </a>
       </p>
       <p style="font-size:13px;color:#555;">
-        If the button above doesn't work, copy and paste this link into your browser:<br>
+        If the button above doesn't work, copy and paste this link:<br>
         <code style="background:#f0f0f0;padding:4px 8px;border-radius:4px;word-break:break-all;">{review_url}</code>
       </p>
       <p style="color:#888;font-size:12px;">
-        This post will be published at {os.getenv("PUBLISH_TIME_DISPLAY","09:00 BRT")} if approved before then.<br>
+        Post will be published at {os.getenv("PUBLISH_TIME_DISPLAY", "09:00 BRT")} if approved before then.<br>
         Post ID: {post_id}
       </p>
     </body></html>
@@ -80,7 +71,6 @@ def send_review_email(
 
 
 def send_published_notification(to: str, topic_name: str, linkedin_url: str) -> None:
-    """Confirms to the user that the post was published."""
     subject = f"✓ Published on LinkedIn — {topic_name}"
     html = f"""
     <html><body style="font-family:Arial,sans-serif;max-width:680px;margin:auto;">
@@ -90,17 +80,3 @@ def send_published_notification(to: str, topic_name: str, linkedin_url: str) -> 
     </body></html>
     """
     _send(to=to, subject=subject, html=html)
-
-
-def _send(to: str, subject: str, html: str) -> None:
-    user = os.environ["SMTP_USER"]
-    sender_name = os.getenv("SMTP_SENDER_NAME", "LinkedIn Agent")
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = f"{sender_name} <{user}>"
-    msg["To"] = to
-    msg.attach(MIMEText(html, "html"))
-
-    with _smtp_connection() as conn:
-        conn.sendmail(user, to, msg.as_string())

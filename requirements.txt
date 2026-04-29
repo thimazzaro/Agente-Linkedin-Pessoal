@@ -22,5 +22,8 @@ pyyaml>=6.0.2
 # HTTP (LinkedIn API)
 requests>=2.32.3
 
+# Email (Resend — works on Railway where direct SMTP is blocked)
+resend>=2.0.0
+
 # Env vars loading in local dev
 python-dotenv>=1.0.1
