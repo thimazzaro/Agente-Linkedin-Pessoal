@@ -4,7 +4,6 @@ System prompt is cached (ephemeral) — saves tokens on rewrites.
 Model: claude-sonnet-4-6 — best cost/quality ratio for structured long-form text.
 """
 import os
-import json
 from typing import List, Optional
 import anthropic
 from config.schema import AgentConfig, PostFormatConfig
@@ -89,13 +88,7 @@ HASHTAGS: Include at most {fmt.hashtags_max} hashtags, only the most relevant. P
 SAFETY AND COPYRIGHT RULES:
 {chr(10).join(f'- {r}' for r in safety_rules)}
 
-OUTPUT FORMAT:
-Return a JSON object with exactly these fields:
-{{
-  "post": "<the LinkedIn post text, ready to publish>",
-  "sources": ["<url1>", "<url2>"]
-}}
-Do not include any text outside the JSON object."""
+Call the output_post tool with the finished post text and the source URLs you drew from."""
 
 
 def generate_post(
@@ -167,16 +160,30 @@ Write the LinkedIn post now."""
             }
         ],
         messages=[{"role": "user", "content": user_message}],
+        tools=[
+            {
+                "name": "output_post",
+                "description": "Output the finished LinkedIn post and its source URLs.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "post": {
+                            "type": "string",
+                            "description": "The LinkedIn post text, ready to publish.",
+                        },
+                        "sources": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "URLs of the source articles used.",
+                        },
+                    },
+                    "required": ["post", "sources"],
+                },
+            }
+        ],
+        tool_choice={"type": "tool", "name": "output_post"},
     )
 
-    raw = response.content[0].text.strip()
-
-    # Strip markdown code fences if the model wrapped the JSON
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-        raw = raw.strip()
-
-    parsed = json.loads(raw)
-    return parsed["post"], parsed.get("sources", [])
+    # Tool-use response is always valid structured data — no JSON parsing needed
+    tool_block = next(b for b in response.content if b.type == "tool_use")
+    return tool_block.input["post"], tool_block.input.get("sources", [])
