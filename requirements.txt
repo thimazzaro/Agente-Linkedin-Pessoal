@@ -15,6 +15,10 @@ sqlalchemy>=2.0.36
 anthropic>=0.40.0
 tavily-python>=0.5.0
 
+# Image generation (Google Gemini Imagen 3)
+# Set GOOGLE_AI_API_KEY to enable; gracefully skipped if not configured.
+google-genai>=1.0.0
+
 # Config — pydantic>=2.11 ships cp314 wheels (Python 3.14 compatible)
 pydantic>=2.11.0
 pyyaml>=6.0.2
