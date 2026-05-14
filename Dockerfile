@@ -13,4 +13,4 @@ COPY . .
 # Railway injects PORT at runtime — do not hardcode it here
 EXPOSE 8080
 
-CMD ["sh", "-c", "uvicorn web.app:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["python", "main.py"]
