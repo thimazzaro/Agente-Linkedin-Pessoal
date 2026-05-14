@@ -28,7 +28,6 @@ REQUIRED_ENV_VARS = [
 
 INSECURE_DEFAULTS = {
     "TRIGGER_SECRET": "changeme",
-    "TRIGGER_SECRET": "generate-with-python-secrets-token-urlsafe-32",
 }
 
 _UUID_RE = re.compile(
