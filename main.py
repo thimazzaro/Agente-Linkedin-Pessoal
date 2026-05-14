@@ -7,8 +7,16 @@ load_dotenv()  # Load .env before any module reads os.environ
 
 import os
 import sys
+import logging
 import asyncio
 import uvicorn
+
+# Route all logs to stdout so Railway classifies them correctly (stderr → "error").
+logging.basicConfig(
+    level=logging.INFO,
+    stream=sys.stdout,
+    format="%(levelname)s:%(name)s:%(message)s",
+)
 
 # Python 3.12+ on Windows defaults to ProactorEventLoop which breaks APScheduler.
 # SelectorEventLoop is required for async scheduler compatibility.
