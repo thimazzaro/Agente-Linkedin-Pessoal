@@ -40,7 +40,11 @@ def generate_post_image(
     try:
         from google import genai
         from google.genai import types as genai_types
+    except ImportError:
+        logger.warning("google-genai package not installed — skipping image generation")
+        return None
 
+    try:
         prompt = _build_prompt(post_content, topic_name, post_format)
         client = genai.Client(api_key=api_key)
 
@@ -50,8 +54,6 @@ def generate_post_image(
             config=genai_types.GenerateImagesConfig(
                 number_of_images=1,
                 aspect_ratio=_ASPECT_RATIO,
-                safety_filter_level="block_some",
-                person_generation="dont_allow",
             ),
         )
 
@@ -62,11 +64,8 @@ def generate_post_image(
         logger.warning("Imagen returned no images for topic '%s'", topic_name)
         return None
 
-    except ImportError:
-        logger.warning("google-genai package not installed — skipping image generation")
-        return None
     except Exception as exc:
-        logger.warning("Image generation failed: %s", exc)
+        logger.exception("Image generation failed for topic '%s': %s", topic_name, exc)
         return None
 
 
