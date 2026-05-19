@@ -1,17 +1,18 @@
 """
-Generates a professional image for LinkedIn posts using Google Gemini Imagen 3.
+Generates a professional image for LinkedIn posts using Google Gemini
+(gemini-2.0-flash-preview-image-generation), which works with a standard
+Google AI Studio API key — no Vertex AI / GCP project required.
 
-Requires:  GOOGLE_AI_API_KEY env var (Google AI Studio key).
-Falls back gracefully to None if the key is absent or generation fails,
-so the agent continues working without images.
+Requires:  GOOGLE_AI_API_KEY env var  (get one free at aistudio.google.com)
+Falls back gracefully to None if the key is absent or generation fails.
 """
 import os
 import logging
 
 logger = logging.getLogger("linkedin_agent")
 
-# Aspect ratio optimised for LinkedIn feed images (landscape 1.91:1 or square 1:1)
-_ASPECT_RATIO = "1:1"
+# Model that supports image output via Google AI Studio API key
+_MODEL = "gemini-2.0-flash-preview-image-generation"
 
 _FORMAT_STYLES: dict[str, str] = {
     "analysis":     "data visualization with abstract charts and graphs, corporate style",
@@ -29,8 +30,7 @@ def generate_post_image(
 ) -> bytes | None:
     """
     Generates a professional infographic image for a LinkedIn post.
-
-    Returns JPEG/PNG bytes, or None when generation is skipped or fails.
+    Returns PNG/JPEG bytes, or None when generation is skipped or fails.
     """
     api_key = os.environ.get("GOOGLE_AI_API_KEY")
     if not api_key:
@@ -48,20 +48,21 @@ def generate_post_image(
         prompt = _build_prompt(post_content, topic_name, post_format)
         client = genai.Client(api_key=api_key)
 
-        response = client.models.generate_images(
-            model="imagen-3.0-generate-001",
-            prompt=prompt,
-            config=genai_types.GenerateImagesConfig(
-                number_of_images=1,
-                aspect_ratio=_ASPECT_RATIO,
+        response = client.models.generate_content(
+            model=_MODEL,
+            contents=prompt,
+            config=genai_types.GenerateContentConfig(
+                response_modalities=["IMAGE", "TEXT"],
             ),
         )
 
-        if response.generated_images:
-            logger.info("Image generated successfully for topic '%s'", topic_name)
-            return response.generated_images[0].image.image_bytes
+        # Extract the first image part from the response
+        for part in response.candidates[0].content.parts:
+            if part.inline_data is not None:
+                logger.info("Image generated successfully for topic '%s'", topic_name)
+                return part.inline_data.data  # bytes (PNG)
 
-        logger.warning("Imagen returned no images for topic '%s'", topic_name)
+        logger.warning("Gemini returned no image parts for topic '%s'", topic_name)
         return None
 
     except Exception as exc:
@@ -70,13 +71,12 @@ def generate_post_image(
 
 
 def _build_prompt(post_content: str, topic_name: str, post_format: str) -> str:
-    """Builds a detailed Imagen prompt from post metadata and content."""
+    """Builds a detailed prompt from post metadata and content."""
     visual_style = _FORMAT_STYLES.get(post_format, "professional business infographic")
-    # Use only the first 250 chars to keep the prompt tight
     snippet = post_content[:250].replace("\n", " ").strip()
 
     return (
-        f"Professional LinkedIn post infographic about {topic_name}. "
+        f"Create a professional LinkedIn post infographic about {topic_name}. "
         f"Visual style: {visual_style}. "
         f"Content theme: {snippet}. "
         "Design requirements: "
