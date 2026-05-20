@@ -1,18 +1,18 @@
 """
-Generates a professional image for LinkedIn posts using Google Gemini
-(gemini-2.0-flash-preview-image-generation), which works with a standard
-Google AI Studio API key — no Vertex AI / GCP project required.
+Generates a professional image for LinkedIn posts.
 
-Requires:  GOOGLE_AI_API_KEY env var  (get one free at aistudio.google.com)
-Falls back gracefully to None if the key is absent or generation fails.
+Strategy (in order):
+  1. Google Gemini Flash Exp via v1alpha API  (requires GOOGLE_AI_API_KEY)
+  2. Pollinations.ai FLUX model               (free, no API key required)
+
+Falls back gracefully to None only if both methods fail.
 """
 import os
 import logging
+import urllib.parse
+import requests
 
 logger = logging.getLogger("linkedin_agent")
-
-# Model that supports image output via Google AI Studio API key
-_MODEL = "gemini-2.0-flash-preview-image-generation"
 
 _FORMAT_STYLES: dict[str, str] = {
     "analysis":     "data visualization with abstract charts and graphs, corporate style",
@@ -29,62 +29,83 @@ def generate_post_image(
     post_format: str,
 ) -> bytes | None:
     """
-    Generates a professional infographic image for a LinkedIn post.
-    Returns PNG/JPEG bytes, or None when generation is skipped or fails.
+    Returns PNG/JPEG bytes for a professional LinkedIn infographic,
+    or None if every generation method fails.
     """
-    api_key = os.environ.get("GOOGLE_AI_API_KEY")
-    if not api_key:
-        logger.info("GOOGLE_AI_API_KEY not configured — skipping image generation")
-        return None
+    prompt = _build_prompt(post_content, topic_name, post_format)
 
+    # 1 — Try Gemini (needs GOOGLE_AI_API_KEY)
+    api_key = os.environ.get("GOOGLE_AI_API_KEY")
+    if api_key:
+        result = _try_gemini(prompt, topic_name, api_key)
+        if result:
+            return result
+
+    # 2 — Fallback: Pollinations.ai (free, no key needed, uses FLUX)
+    return _try_pollinations(prompt, topic_name)
+
+
+# ── Gemini Flash (v1alpha — image generation feature) ────────────────────────
+
+def _try_gemini(prompt: str, topic_name: str, api_key: str) -> bytes | None:
     try:
         from google import genai
         from google.genai import types as genai_types
     except ImportError:
-        logger.warning("google-genai package not installed — skipping image generation")
+        logger.warning("google-genai not installed — skipping Gemini image generation")
         return None
 
     try:
-        prompt = _build_prompt(post_content, topic_name, post_format)
-        client = genai.Client(api_key=api_key)
-
+        # Image generation requires the v1alpha API endpoint
+        client = genai.Client(
+            api_key=api_key,
+            http_options={"api_version": "v1alpha"},
+        )
         response = client.models.generate_content(
-            model=_MODEL,
+            model="gemini-2.0-flash-exp",
             contents=prompt,
             config=genai_types.GenerateContentConfig(
                 response_modalities=["IMAGE", "TEXT"],
             ),
         )
-
-        # Extract the first image part from the response
         for part in response.candidates[0].content.parts:
             if part.inline_data is not None:
-                logger.info("Image generated successfully for topic '%s'", topic_name)
-                return part.inline_data.data  # bytes (PNG)
-
-        logger.warning("Gemini returned no image parts for topic '%s'", topic_name)
+                logger.info("Gemini image generated for topic '%s'", topic_name)
+                return part.inline_data.data
+        logger.warning("Gemini returned no image parts for '%s'", topic_name)
         return None
-
     except Exception as exc:
-        logger.exception("Image generation failed for topic '%s': %s", topic_name, exc)
+        logger.warning("Gemini image generation failed: %s — trying fallback", exc)
         return None
 
+
+# ── Pollinations.ai fallback (FLUX, free, no key) ────────────────────────────
+
+def _try_pollinations(prompt: str, topic_name: str) -> bytes | None:
+    try:
+        encoded = urllib.parse.quote(prompt)
+        url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&model=flux&nologo=true"
+        resp = requests.get(url, timeout=60)
+        if resp.ok and resp.content:
+            logger.info("Pollinations image generated for topic '%s'", topic_name)
+            return resp.content
+        logger.warning("Pollinations returned %s for '%s'", resp.status_code, topic_name)
+        return None
+    except Exception as exc:
+        logger.exception("Pollinations image generation failed: %s", exc)
+        return None
+
+
+# ── Prompt builder ────────────────────────────────────────────────────────────
 
 def _build_prompt(post_content: str, topic_name: str, post_format: str) -> str:
-    """Builds a detailed prompt from post metadata and content."""
     visual_style = _FORMAT_STYLES.get(post_format, "professional business infographic")
     snippet = post_content[:250].replace("\n", " ").strip()
-
     return (
-        f"Create a professional LinkedIn post infographic about {topic_name}. "
+        f"Professional LinkedIn post infographic about {topic_name}. "
         f"Visual style: {visual_style}. "
         f"Content theme: {snippet}. "
-        "Design requirements: "
-        "dark navy blue and white color palette, "
-        "minimalist modern corporate design, "
-        "no human faces or people, "
-        "abstract data visuals or icons only, "
-        "clean typography with key stats or keywords, "
-        "premium business look suitable for a financial markets or AI executive audience, "
-        "high resolution, sharp edges, gradient accents."
+        "Design: dark navy blue and white palette, minimalist corporate style, "
+        "no human faces, abstract data visuals and icons, clean bold typography, "
+        "premium business look for financial markets and AI audience, high resolution."
     )
