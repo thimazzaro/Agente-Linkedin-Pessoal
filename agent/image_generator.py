@@ -1,25 +1,45 @@
 """
-Generates a professional image for LinkedIn posts.
+Generates a professional LinkedIn post infographic using Pillow (local, no API).
 
-Strategy (in order):
-  1. Google Gemini Flash Exp via v1alpha API  (requires GOOGLE_AI_API_KEY)
-  2. Pollinations.ai FLUX model               (free, no API key required)
-
-Falls back gracefully to None only if both methods fail.
+Design: dark navy background, LinkedIn blue accents, topic headline,
+format badge, post excerpt, and author footer. Always produces a
+consistent, relevant, branded image — no external API required.
 """
-import os
+import io
 import logging
-import urllib.parse
-import requests
+import textwrap
 
 logger = logging.getLogger("linkedin_agent")
 
-_FORMAT_STYLES: dict[str, str] = {
-    "analysis":     "data visualization with abstract charts and graphs, corporate style",
-    "list":         "clean numbered list visual with modern icons and bold typography",
-    "news_context": "bold news-headline typography over a minimal background",
-    "trend":        "upward trend arrow with data points, futuristic design",
-    "week_wrap":    "weekly summary dashboard layout with metrics tiles",
+# LinkedIn recommended image size (1.91:1 landscape)
+_W, _H = 1200, 627
+
+# Color palette
+_BG     = (10,  35,  66)    # #0A2342 dark navy
+_DARK   = (6,   22,  44)    # #06162C deeper navy (footer)
+_ACCENT = (0,  119, 181)    # #0077B5 LinkedIn blue
+_DIM    = (0,   80, 140)    # dimmer blue (decorative)
+_WHITE  = (255, 255, 255)
+_MUTED  = (160, 200, 230)   # soft blue-grey (body text)
+
+# Font paths for Railway (Debian) — falls back to PIL bitmap if missing
+_BOLD_FONTS = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+]
+_REG_FONTS = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+]
+
+_FORMAT_LABELS = {
+    "analysis":     "ANÁLISE",
+    "list":         "LISTA",
+    "news_context": "NOTÍCIA",
+    "trend":        "TENDÊNCIA",
+    "week_wrap":    "RESUMO SEMANAL",
 }
 
 
@@ -27,85 +47,110 @@ def generate_post_image(
     post_content: str,
     topic_name: str,
     post_format: str,
+    author_name: str = "LinkedIn Agent",
 ) -> bytes | None:
-    """
-    Returns PNG/JPEG bytes for a professional LinkedIn infographic,
-    or None if every generation method fails.
-    """
-    prompt = _build_prompt(post_content, topic_name, post_format)
-
-    # 1 — Try Gemini (needs GOOGLE_AI_API_KEY)
-    api_key = os.environ.get("GOOGLE_AI_API_KEY")
-    if api_key:
-        result = _try_gemini(prompt, topic_name, api_key)
-        if result:
-            return result
-
-    # 2 — Fallback: Pollinations.ai (free, no key needed, uses FLUX)
-    return _try_pollinations(prompt, topic_name)
-
-
-# ── Gemini Flash (v1alpha — image generation feature) ────────────────────────
-
-def _try_gemini(prompt: str, topic_name: str, api_key: str) -> bytes | None:
+    """Returns JPEG bytes of a professional infographic, or None on failure."""
     try:
-        from google import genai
-        from google.genai import types as genai_types
-    except ImportError:
-        logger.warning("google-genai not installed — skipping Gemini image generation")
-        return None
-
-    try:
-        # Image generation requires the v1alpha API endpoint
-        client = genai.Client(
-            api_key=api_key,
-            http_options={"api_version": "v1alpha"},
-        )
-        response = client.models.generate_content(
-            model="gemini-2.0-flash-exp",
-            contents=prompt,
-            config=genai_types.GenerateContentConfig(
-                response_modalities=["IMAGE", "TEXT"],
-            ),
-        )
-        for part in response.candidates[0].content.parts:
-            if part.inline_data is not None:
-                logger.info("Gemini image generated for topic '%s'", topic_name)
-                return part.inline_data.data
-        logger.warning("Gemini returned no image parts for '%s'", topic_name)
-        return None
+        return _render(post_content, topic_name, post_format, author_name)
     except Exception as exc:
-        logger.warning("Gemini image generation failed: %s — trying fallback", exc)
+        logger.exception("Pillow infographic generation failed: %s", exc)
         return None
 
 
-# ── Pollinations.ai fallback (FLUX, free, no key) ────────────────────────────
+# ── Renderer ──────────────────────────────────────────────────────────────────
 
-def _try_pollinations(prompt: str, topic_name: str) -> bytes | None:
+def _render(
+    post_content: str,
+    topic_name: str,
+    post_format: str,
+    author_name: str,
+) -> bytes:
+    from PIL import Image, ImageDraw, ImageFont
+
+    img  = Image.new("RGB", (_W, _H), _BG)
+    draw = ImageDraw.Draw(img)
+
+    # ── Decorative background shapes ─────────────────────────────────────────
+    # Large circle — top-right corner
+    draw.ellipse([870, -180, 1420, 370], fill=_DIM)
+    # Small accent circles — bottom-right
+    for cx, cy, r in [(1100, 520, 55), (1155, 570, 32), (1055, 575, 18)]:
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(0, 90, 150))
+
+    # Left accent bar
+    draw.rectangle([0, 0, 8, _H], fill=_ACCENT)
+
+    # ── Fonts ─────────────────────────────────────────────────────────────────
+    f_title = _font(_BOLD_FONTS, 46)
+    f_badge = _font(_BOLD_FONTS, 15)
+    f_body  = _font(_REG_FONTS,  18)
+    f_foot  = _font(_REG_FONTS,  14)
+
+    # ── Topic title ───────────────────────────────────────────────────────────
+    title_text = topic_name.upper()
+    wrapped_title = textwrap.fill(title_text, width=26)
+    draw.text((56, 68), wrapped_title, font=f_title, fill=_WHITE)
+
+    # Measure title height to position elements below it
+    title_lines = wrapped_title.count("\n") + 1
+    title_bottom = 68 + title_lines * 56
+
+    # Short LinkedIn-blue underline beneath title
+    draw.rectangle([56, title_bottom + 10, 116, title_bottom + 14], fill=_ACCENT)
+
+    # ── Format badge ──────────────────────────────────────────────────────────
+    badge_label = _FORMAT_LABELS.get(post_format, post_format.replace("_", " ").upper())
+    bx, by = 56, title_bottom + 28
     try:
-        encoded = urllib.parse.quote(prompt)
-        url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&model=flux&nologo=true"
-        resp = requests.get(url, timeout=60)
-        if resp.ok and resp.content:
-            logger.info("Pollinations image generated for topic '%s'", topic_name)
-            return resp.content
-        logger.warning("Pollinations returned %s for '%s'", resp.status_code, topic_name)
-        return None
-    except Exception as exc:
-        logger.exception("Pollinations image generation failed: %s", exc)
-        return None
+        bw = int(draw.textlength(badge_label, font=f_badge))
+    except AttributeError:
+        bw = len(badge_label) * 9
+    _rounded_rect(draw, bx, by, bx + bw + 24, by + 28, 14, _ACCENT)
+    draw.text((bx + 12, by + 6), badge_label, font=f_badge, fill=_WHITE)
+
+    # ── Post excerpt ──────────────────────────────────────────────────────────
+    excerpt = post_content[:520].replace("\n\n", " ").replace("\n", " ").strip()
+    wrapped  = textwrap.fill(excerpt, width=70)
+    lines    = wrapped.split("\n")[:7]
+    ey = by + 50
+    for line in lines:
+        draw.text((56, ey), line, font=f_body, fill=_MUTED)
+        ey += 30
+
+    # ── Footer bar ────────────────────────────────────────────────────────────
+    draw.rectangle([0, _H - 46, _W, _H], fill=_DARK)
+    draw.rectangle([0, _H - 46, 8,  _H], fill=_ACCENT)
+    footer_txt = f"LinkedIn Agent  ·  {author_name}"
+    draw.text((56, _H - 30), footer_txt, font=f_foot, fill=_MUTED)
+
+    # ── Encode ────────────────────────────────────────────────────────────────
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=92)
+    logger.info("Infographic generated for topic '%s'", topic_name)
+    return buf.getvalue()
 
 
-# ── Prompt builder ────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _build_prompt(post_content: str, topic_name: str, post_format: str) -> str:
-    visual_style = _FORMAT_STYLES.get(post_format, "professional business infographic")
-    snippet = post_content[:250].replace("\n", " ").strip()
-    return (
-        f"Professional LinkedIn post infographic about {topic_name}. "
-        f"Visual style: {visual_style}. "
-        f"Content theme: {snippet}. "
-        "Design: dark navy blue and white palette, minimalist corporate style, "
-        "no human faces, abstract data visuals and icons, clean bold typography, "
-        "premium business look for financial markets and AI audience, high resolution."
-    )
+def _font(paths: list[str], size: int):
+    from PIL import ImageFont
+    for p in paths:
+        try:
+            return ImageFont.truetype(p, size)
+        except (IOError, OSError):
+            pass
+    return ImageFont.load_default()
+
+
+def _rounded_rect(draw, x0, y0, x1, y1, radius, fill):
+    """Draw a rounded rectangle (compatible with older Pillow versions)."""
+    try:
+        draw.rounded_rectangle([x0, y0, x1, y1], radius=radius, fill=fill)
+    except AttributeError:
+        # Pillow < 8.2 fallback
+        draw.rectangle([x0 + radius, y0, x1 - radius, y1], fill=fill)
+        draw.rectangle([x0, y0 + radius, x1, y1 - radius], fill=fill)
+        draw.ellipse([x0, y0, x0 + radius * 2, y0 + radius * 2], fill=fill)
+        draw.ellipse([x1 - radius * 2, y0, x1, y0 + radius * 2], fill=fill)
+        draw.ellipse([x0, y1 - radius * 2, x0 + radius * 2, y1], fill=fill)
+        draw.ellipse([x1 - radius * 2, y1 - radius * 2, x1, y1], fill=fill)

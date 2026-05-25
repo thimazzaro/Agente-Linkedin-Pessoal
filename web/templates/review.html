@@ -181,6 +181,16 @@
         </div>
       </div>
       <div class="post-text">{{ post.content }}</div>
+      {% if post.has_image %}
+      <div style="margin-top:14px;">
+        <img
+          src="/images/{{ post.id }}"
+          alt="Post infographic"
+          style="width:100%;border-radius:8px;border:1px solid #dce6f0;"
+        />
+        <p style="font-size:11px;color:#aaa;margin:4px 0 0;">Image that will be attached to the LinkedIn post</p>
+      </div>
+      {% endif %}
       <div class="post-meta">
         <span>{{ post.scheduled_date.strftime("%B %d, %Y") }}</span>
         <span>Post ID: {{ post.id[:8] }}…</span>

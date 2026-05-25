@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 
 import pytz
 from fastapi import FastAPI, HTTPException, Request, Form
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -150,7 +150,10 @@ async def run_generation_job() -> None:
         db.refresh(post)
 
         # Generate image asynchronously-ish (blocking but fast ~5-10s)
-        image_bytes = generate_post_image(post_text, topic.name, post_format)
+        image_bytes = generate_post_image(
+            post_text, topic.name, post_format,
+            author_name=cfg.profile.name,
+        )
         if image_bytes:
             image_path = f"data/images/{post.id}.jpg"
             try:
@@ -241,7 +244,10 @@ async def run_rewrite_job(post_id: str) -> None:
         post.status = PostStatus.pending_review
 
         # Regenerate image for the rewrite
-        image_bytes = generate_post_image(new_text, post.topic_name, post.post_format)
+        image_bytes = generate_post_image(
+            new_text, post.topic_name, post.post_format,
+            author_name=cfg.profile.name,
+        )
         if image_bytes:
             image_path = f"data/images/{post.id}.jpg"
             try:
@@ -376,6 +382,7 @@ async def review_page(request: Request, post_id: str, token: str):
             "rewrite_count": post.rewrite_count,
             "scheduled_date": post.scheduled_date,
             "status": post.status,
+            "has_image": bool(post.image_path),
         }
     finally:
         db.close()
@@ -506,6 +513,17 @@ async def manual_trigger_publish(request: Request, secret: str):
         raise HTTPException(status_code=401)
     scheduler.add_job(run_publish_job, id="manual_pub", replace_existing=True)
     return {"status": "publish job queued"}
+
+
+@app.get("/images/{post_id}")
+async def serve_image(post_id: str):
+    """Serves the generated infographic for a post (used by the review page)."""
+    if not is_valid_uuid(post_id):
+        raise HTTPException(status_code=400, detail="Invalid post ID.")
+    path = f"data/images/{post_id}.jpg"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Image not found.")
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @app.get("/health")
